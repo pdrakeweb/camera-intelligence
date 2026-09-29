@@ -94,6 +94,19 @@ def normalize_payload(data: dict) -> dict:
         }
 
     delivered = bool(package.get("delivered", False))
+
+    visitors = []
+    for v in (data.get("visitors") or []):
+        v = v or {}
+        visitors.append(
+            {
+                "name": str(v.get("name") or "unknown"),
+                "vehicle": str(v.get("vehicle") or ""),
+                "last_seen": v.get("last_seen"),
+                "last_camera": v.get("last_camera"),
+            }
+        )
+
     return {
         "vehicles": vehicles,
         "all_vehicles": _norm_vehicle_status(
@@ -107,6 +120,7 @@ def normalize_payload(data: dict) -> dict:
             "camera": guest.get("camera"),
             "streak": guest.get("streak", 0),
         },
+        "visitors": visitors,
         "package": {
             "status": PACKAGE_DELIVERED if delivered else PACKAGE_NONE,
             "location": package.get("location") or "none",

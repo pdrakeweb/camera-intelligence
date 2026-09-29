@@ -39,6 +39,7 @@ def _build_entities(store: dict) -> list[CameraIntelligenceSensor]:
     entities.append(DrivewayVehiclesSensor())
     entities.append(UnknownVehicleSensor())
     entities.append(GuestSensor())
+    entities.append(VisitorsSensor())
     entities.append(PackageSensor())
     return entities
 
@@ -153,6 +154,28 @@ class GuestSensor(CameraIntelligenceSensor):
             "first_seen": guest.get("first_seen"),
             "camera": guest.get("camera"),
             "streak": guest.get("streak", 0),
+        }
+
+
+class VisitorsSensor(CameraIntelligenceSensor):
+    """Count of known visitors currently on the property.
+
+    State is the number of visitors; attributes carry who they are and
+    where each was seen. Only owner-confirmed known visitors (matched
+    against the agent's known-visitors records) appear here — never
+    zero-shot guesses.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("visitors", "Visitors", icon="mdi:account-group")
+        self._attr_native_value = 0
+
+    def _update_from_payload(self, payload: dict) -> None:
+        visitors = payload.get("visitors") or []
+        self._attr_native_value = len(visitors)
+        self._attr_extra_state_attributes = {
+            "visitors": [v.get("name") for v in visitors],
+            "details": visitors,
         }
 
 

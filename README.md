@@ -88,6 +88,9 @@ POST /api/camera_intelligence/update   (authenticated, local only)
   "driveway_vehicles": ["2007 Hyundai Entourage"],
   "unknown_vehicle": false,
   "guest": {"present": false, "first_seen": null, "camera": null, "streak": 0},
+  "visitors": [
+    {"name": "Nana and Papa", "vehicle": "silver sedan", "last_seen": "2026-09-29T21:08:34Z", "last_camera": "camera.driveway_fluent_2"}
+  ],
   "package": {"delivered": false, "location": "none", "truck_service": "none", "last_delivery": null}
 }
 ```
@@ -105,6 +108,7 @@ GET /api/camera_intelligence/state
 - `sensor.camera_intelligence_driveway_vehicles` — "Driveway Vehicles", comma-separated list or `none`
 - `sensor.camera_intelligence_unknown_vehicle` — "Unknown Vehicle", `present` / `none` (single-scan)
 - `sensor.camera_intelligence_guest` — "Guest", `present` / `none` (attributes: first_seen, camera, streak)
+- `sensor.camera_intelligence_visitors` — "Visitors", count of known visitors on the property (attributes: visitors, details)
 - `sensor.camera_intelligence_package` — "Package", `delivered` / `none` (attributes: location, truck_service, last_delivery)
 
 All entities use stable unique IDs and restore their last state across

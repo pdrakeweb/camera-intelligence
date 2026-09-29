@@ -6,11 +6,11 @@ import logging
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import discovery
 
-from .const import CONF_VEHICLES, DEFAULT_VEHICLES, DOMAIN
+from .const import CONF_VEHICLES, DEFAULT_VEHICLES, DOMAIN, PLATFORMS
 from .http import CameraIntelligenceStateView, CameraIntelligenceUpdateView
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,20 +30,40 @@ CONFIG_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Camera Intelligence integration from YAML."""
-    conf = config.get(DOMAIN, {})
-    vehicles = conf.get(CONF_VEHICLES, DEFAULT_VEHICLES)
+    """Set up the Camera Intelligence integration.
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][CONF_VEHICLES] = vehicles
-    hass.data[DOMAIN]["state"] = None  # latest agent payload
+    YAML configuration is imported into a config entry so both setup styles
+    share the same code path.
+    """
+    if DOMAIN in config:
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_IMPORT},
+                data=dict(config[DOMAIN]),
+            )
+        )
+    return True
 
-    hass.http.register_view(CameraIntelligenceUpdateView())
-    hass.http.register_view(CameraIntelligenceStateView())
 
-    hass.async_create_task(
-        discovery.async_load_platform(hass, "sensor", DOMAIN, {}, conf)
-    )
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Camera Intelligence from a config entry."""
+    store = hass.data.setdefault(DOMAIN, {})
+    store[CONF_VEHICLES] = entry.data.get(CONF_VEHICLES, DEFAULT_VEHICLES)
+    store.setdefault("state", None)  # latest agent payload
 
+    if not store.get("_views_registered"):
+        hass.http.register_view(CameraIntelligenceUpdateView())
+        hass.http.register_view(CameraIntelligenceStateView())
+        store["_views_registered"] = True
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    vehicles = store[CONF_VEHICLES]
     _LOGGER.info("Camera Intelligence set up for vehicles: %s", ", ".join(vehicles))
     return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a Camera Intelligence config entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

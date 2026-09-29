@@ -22,8 +22,16 @@ from .const import (
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up Camera Intelligence sensors."""
-    store = hass.data[DOMAIN]
+    """Set up Camera Intelligence sensors (legacy YAML discovery path)."""
+    async_add_entities(_build_entities(hass.data[DOMAIN]))
+
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up Camera Intelligence sensors from a config entry."""
+    async_add_entities(_build_entities(hass.data[DOMAIN]))
+
+
+def _build_entities(store: dict) -> list[CameraIntelligenceSensor]:
     entities: list[CameraIntelligenceSensor] = [
         VehiclePresenceSensor(vehicle) for vehicle in store.get(CONF_VEHICLES, [])
     ]
@@ -32,7 +40,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     entities.append(UnknownVehicleSensor())
     entities.append(GuestSensor())
     entities.append(PackageSensor())
-    async_add_entities(entities)
+    return entities
 
 
 class CameraIntelligenceSensor(SensorEntity, RestoreEntity):

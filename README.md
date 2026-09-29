@@ -50,14 +50,21 @@ Download, then restart Home Assistant.
 
 ### Step 2: Configure
 
-Add to `configuration.yaml`:
+No YAML needed. In Home Assistant go to Settings → Devices & services →
+Add integration → **Camera Intelligence**, and confirm. The integration
+registers its local API and entities on setup.
+
+<details>
+<summary>YAML configuration (legacy, optional)</summary>
 
 ```yaml
 camera_intelligence:
 ```
 
-Restart Home Assistant. The integration registers its local API and entities
-on setup.
+A YAML entry is imported automatically into the UI configuration on the
+next restart; you can remove the YAML afterwards.
+
+</details>
 
 ### Step 3: Push state from your agent
 

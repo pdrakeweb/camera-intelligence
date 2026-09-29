@@ -1,0 +1,1 @@
+{"config":{"abort":{"single_instance_allowed":"Camera Intelligence is already set up."},"step":{"user":{"data":{},"description":"Set up Camera Intelligence. An external agent pushes vehicle presence and event states to this integration's local API, so there is nothing further to configure.","title":"Camera Intelligence"}}}}

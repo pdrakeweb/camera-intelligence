@@ -195,6 +195,7 @@ class PackageSensor(CameraIntelligenceSensor):
         self._attr_native_value = package["status"]
         self._attr_extra_state_attributes = {
             "package_count": package.get("count", 0),
+            "zones": package.get("zones") or {"porch": 0, "driveway": 0},
             "location": package.get("location"),
             "truck_service": package.get("truck_service"),
             "last_delivery": package.get("last_delivery"),

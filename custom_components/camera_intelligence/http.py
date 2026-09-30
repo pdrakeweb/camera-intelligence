@@ -58,6 +58,14 @@ def _norm_presence(value) -> str:
     return v if v in (PRESENCE_PRESENT, PRESENCE_NONE) else PRESENCE_NONE
 
 
+def _safe_zone_count(value) -> int:
+    """Coerce a per-zone parcel count to a non-negative int."""
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def normalize_payload(data: dict) -> dict:
     """Coerce an agent payload into canonical shape (pure function)."""
     vehicles = {}
@@ -97,6 +105,25 @@ def normalize_payload(data: dict) -> dict:
 
     delivered = bool(package.get("delivered", False))
 
+    # Per-zone parcel counts. The agent sends "zones" (e.g. {"porch": 0,
+    # "driveway": 1}); older payloads are derived from location + count.
+    raw_zones = package.get("zones") or {}
+    if raw_zones:
+        zones = {
+            "porch": _safe_zone_count(raw_zones.get("porch")),
+            "driveway": _safe_zone_count(raw_zones.get("driveway")),
+        }
+    else:
+        loc = str(package.get("location") or "none")
+        try:
+            total = int(package.get("count") or 0)
+        except (TypeError, ValueError):
+            total = 0
+        zones = {
+            "porch": total if loc == "porch" else 0,
+            "driveway": total if loc == "driveway" else 0,
+        }
+
     visitors = []
     for v in (data.get("visitors") or []):
         v = v or {}
@@ -126,6 +153,7 @@ def normalize_payload(data: dict) -> dict:
         "package": {
             "status": PACKAGE_DELIVERED if delivered else PACKAGE_NONE,
             "count": package.get("count", 0),
+            "zones": zones,
             "location": package.get("location") or "none",
             "truck_service": package.get("truck_service") or "none",
             "last_delivery": package.get("last_delivery"),

@@ -2,7 +2,7 @@
 
 DOMAIN = "camera_intelligence"
 
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "binary_sensor"]
 
 CONF_VEHICLES = "vehicles"
 DEFAULT_VEHICLES = ["sportage", "sorento", "entourage", "sky", "qx80", "commander"]

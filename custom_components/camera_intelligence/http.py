@@ -82,6 +82,8 @@ def normalize_payload(data: dict) -> dict:
         # Legacy delivery block.
         package = {
             "delivered": delivery.get("active", False),
+            "count": (1 if delivery.get("package_on_porch") else 0)
+            + (1 if delivery.get("package_in_driveway") else 0),
             "location": (
                 "porch"
                 if delivery.get("package_on_porch")
@@ -123,6 +125,7 @@ def normalize_payload(data: dict) -> dict:
         "visitors": visitors,
         "package": {
             "status": PACKAGE_DELIVERED if delivered else PACKAGE_NONE,
+            "count": package.get("count", 0),
             "location": package.get("location") or "none",
             "truck_service": package.get("truck_service") or "none",
             "last_delivery": package.get("last_delivery"),

@@ -180,7 +180,11 @@ class VisitorsSensor(CameraIntelligenceSensor):
 
 
 class PackageSensor(CameraIntelligenceSensor):
-    """delivered when a delivery truck was seen or a package is waiting."""
+    """delivered when a delivery truck was seen or a package is waiting.
+
+    Extra attributes: package_count (parcels outside awaiting pickup),
+    location, truck_service, last_delivery.
+    """
 
     def __init__(self) -> None:
         super().__init__("package", "Package", icon="mdi:package-variant")
@@ -190,6 +194,7 @@ class PackageSensor(CameraIntelligenceSensor):
         package = payload["package"]
         self._attr_native_value = package["status"]
         self._attr_extra_state_attributes = {
+            "package_count": package.get("count", 0),
             "location": package.get("location"),
             "truck_service": package.get("truck_service"),
             "last_delivery": package.get("last_delivery"),

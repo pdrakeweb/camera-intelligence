@@ -159,13 +159,14 @@ class GuestSensor(CameraIntelligenceSensor):
 
 
 class VisitorsSensor(CameraIntelligenceSensor):
-    """Single combined count: known visitors + unknown guests + packages.
+    """Single combined count: known visitors + unknown guests.
 
     The state is one number for the dashboard: the count of known visitors
     currently on the property, plus unknown guests (unidentified vehicles
-    lingering in the driveway), plus parcels awaiting pickup. Attributes
-    break the count down and list who each entry is — named visitors and
-    an "Unknown guest" entry when one is present.
+    lingering in the driveway). Attributes break the count down and list
+    who each entry is — named visitors and an "Unknown guest" entry when
+    one is present. Packages are NOT included: they have their own
+    dashboard button bound to the package sensor.
 
     The individual guest and package sensors remain for automations; this
     sensor is the combined display count.
@@ -178,13 +179,8 @@ class VisitorsSensor(CameraIntelligenceSensor):
     def _update_from_payload(self, payload: dict) -> None:
         visitors = payload.get("visitors") or []
         guest = payload.get("guest") or {}
-        package = payload.get("package") or {}
 
         guest_present = guest.get("status") == PRESENCE_PRESENT
-        try:
-            package_count = max(0, int(package.get("count") or 0))
-        except (TypeError, ValueError):
-            package_count = 0
 
         details = list(visitors)
         if guest_present:
@@ -201,14 +197,11 @@ class VisitorsSensor(CameraIntelligenceSensor):
         breakdown = {
             "visitors": len(visitors),
             "guests": 1 if guest_present else 0,
-            "packages": package_count,
         }
-        self._attr_native_value = len(visitors) + (1 if guest_present else 0) + package_count
+        self._attr_native_value = len(visitors) + (1 if guest_present else 0)
         self._attr_extra_state_attributes = {
             "visitors": [v.get("name") for v in visitors],
             "details": details,
-            "package_count": package_count,
-            "zones": package.get("zones") or {"porch": 0, "driveway": 0},
             "breakdown": breakdown,
         }
 

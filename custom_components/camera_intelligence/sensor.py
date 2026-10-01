@@ -16,6 +16,7 @@ from .const import (
     CONF_VEHICLES,
     DOMAIN,
     PACKAGE_NONE,
+    PRESENCE_PRESENT,
     SIGNAL_UPDATE,
     STATUS_UNKNOWN,
 )
@@ -158,12 +159,16 @@ class GuestSensor(CameraIntelligenceSensor):
 
 
 class VisitorsSensor(CameraIntelligenceSensor):
-    """Count of known visitors currently on the property.
+    """Single combined count: known visitors + unknown guests + packages.
 
-    State is the number of visitors; attributes carry who they are and
-    where each was seen. Only owner-confirmed known visitors (matched
-    against the agent's known-visitors records) appear here — never
-    zero-shot guesses.
+    The state is one number for the dashboard: the count of known visitors
+    currently on the property, plus unknown guests (unidentified vehicles
+    lingering in the driveway), plus parcels awaiting pickup. Attributes
+    break the count down and list who each entry is — named visitors and
+    an "Unknown guest" entry when one is present.
+
+    The individual guest and package sensors remain for automations; this
+    sensor is the combined display count.
     """
 
     def __init__(self) -> None:
@@ -172,10 +177,39 @@ class VisitorsSensor(CameraIntelligenceSensor):
 
     def _update_from_payload(self, payload: dict) -> None:
         visitors = payload.get("visitors") or []
-        self._attr_native_value = len(visitors)
+        guest = payload.get("guest") or {}
+        package = payload.get("package") or {}
+
+        guest_present = guest.get("status") == PRESENCE_PRESENT
+        try:
+            package_count = max(0, int(package.get("count") or 0))
+        except (TypeError, ValueError):
+            package_count = 0
+
+        details = list(visitors)
+        if guest_present:
+            details.append(
+                {
+                    "name": "Unknown guest",
+                    "vehicle": "unknown vehicle",
+                    "first_seen": guest.get("first_seen"),
+                    "last_camera": guest.get("camera"),
+                    "streak": guest.get("streak", 0),
+                }
+            )
+
+        breakdown = {
+            "visitors": len(visitors),
+            "guests": 1 if guest_present else 0,
+            "packages": package_count,
+        }
+        self._attr_native_value = len(visitors) + (1 if guest_present else 0) + package_count
         self._attr_extra_state_attributes = {
             "visitors": [v.get("name") for v in visitors],
-            "details": visitors,
+            "details": details,
+            "package_count": package_count,
+            "zones": package.get("zones") or {"porch": 0, "driveway": 0},
+            "breakdown": breakdown,
         }
 
 

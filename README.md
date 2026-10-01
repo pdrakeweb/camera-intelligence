@@ -108,7 +108,7 @@ GET /api/camera_intelligence/state
 - `sensor.camera_intelligence_driveway_vehicles` — "Driveway Vehicles", comma-separated list or `none`
 - `sensor.camera_intelligence_unknown_vehicle` — "Unknown Vehicle", `present` / `none` (single-scan)
 - `sensor.camera_intelligence_guest` — "Guest", `present` / `none` (attributes: first_seen, camera, streak)
-- `sensor.camera_intelligence_visitors` — "Visitors", single combined count: known visitors on the property + unknown guests + parcels awaiting pickup (attributes: visitors, details — named visitors plus an "Unknown guest" entry when one is present, package_count, zones, breakdown)
+- `sensor.camera_intelligence_visitors` — "Visitors", single combined count: known visitors on the property + unknown guests (attributes: visitors, details — named visitors plus an "Unknown guest" entry when one is present, breakdown)
 - `sensor.camera_intelligence_package` — "Package", `delivered` / `none` (attributes: package_count, zones, location, truck_service, last_delivery)
 
 All entities use stable unique IDs and restore their last state across

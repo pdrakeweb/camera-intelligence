@@ -7,9 +7,15 @@ event-style entities use present/none or delivered/none.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
@@ -19,6 +25,15 @@ from .const import (
     PRESENCE_PRESENT,
     SIGNAL_UPDATE,
     STATUS_UNKNOWN,
+)
+from .presence_hints import (
+    DRIVER_IDS,
+    DRIVER_VEHICLES,
+    KEY_TRACKERS,
+    PERSONS,
+    compute_hint,
+    compute_person_hint,
+    drivers_home,
 )
 
 
@@ -32,10 +47,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(_build_entities(hass.data[DOMAIN]))
 
 
-def _build_entities(store: dict) -> list[CameraIntelligenceSensor]:
+def _build_entities(store: dict) -> list[SensorEntity]:
     entities: list[CameraIntelligenceSensor] = [
         VehiclePresenceSensor(vehicle) for vehicle in store.get(CONF_VEHICLES, [])
     ]
+    entities.extend(
+        VehiclePresenceHintsSensor(vehicle)
+        for vehicle in store.get(CONF_VEHICLES, [])
+    )
+    entities.extend(PersonPresenceHintsSensor(person_id) for person_id in DRIVER_IDS)
+    entities.append(DriversHomeSensor())
     entities.append(AllVehiclesSensor())
     entities.append(DrivewayVehiclesSensor())
     entities.append(UnknownVehicleSensor())
@@ -102,6 +123,168 @@ class VehiclePresenceSensor(CameraIntelligenceSensor):
             "last_seen": info.get("last_seen"),
             "last_camera": info.get("last_camera"),
         }
+
+
+class VehiclePresenceHintsSensor(SensorEntity):
+    """Advisory Bayesian presence hint: likelihood the vehicle is home.
+
+    Fuses non-camera evidence only (time of day, key trackers, family
+    presence) via presence_hints.compute_hint. The name says "Hints" on
+    purpose: the camera-based vehicle sensors remain the primary UI source
+    of truth. Recomputes when this vehicle's key trackers change, plus a
+    5-minute interval backstop (covers family-presence drift).
+    """
+
+    _attr_should_poll = False
+
+    def __init__(self, vehicle: str) -> None:
+        self._vehicle = vehicle
+        key = f"{vehicle}_presence_hints"
+        self._attr_unique_id = f"camera_intelligence_{key}"
+        self._attr_name = f"{vehicle.replace('_', ' ').title()} Presence Hints"
+        self._attr_icon = "mdi:gauge"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
+
+    def _watched_entities(self) -> list[str]:
+        entities = list(KEY_TRACKERS.get(self._vehicle, []))
+        for driver, _role in DRIVER_VEHICLES.get(self._vehicle, []):
+            cfg = PERSONS[driver]
+            entities.extend([cfg["person"], cfg["phone"]])
+        return entities
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                self._watched_entities(),
+                self._async_recompute,
+            )
+        )
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_recompute, timedelta(minutes=5)
+            )
+        )
+        self._recompute()
+
+    @callback
+    def _async_recompute(self, *args) -> None:
+        self._recompute()
+
+    def _recompute(self) -> None:
+        probability, audit = compute_hint(self.hass, self._vehicle)
+        self._attr_native_value = int(probability * 100)
+        self._attr_extra_state_attributes = audit
+        self.async_write_ha_state()
+
+
+class PersonPresenceHintsSensor(SensorEntity):
+    """Advisory Bayesian presence hint for one driver.
+
+    Fuses person.<id> entity + that driver's phone tracker + time of day via
+    presence_hints.compute_person_hint. Camera data NEVER enters here
+    (circularity rule). Recomputes on the person/phone entity changes plus
+    a 5-minute interval backstop.
+    """
+
+    _attr_should_poll = False
+
+    def __init__(self, person_id: str) -> None:
+        self._person_id = person_id
+        name = PERSONS[person_id]["name"]
+        key = f"person_{person_id}_presence_hints"
+        self._attr_unique_id = f"camera_intelligence_{key}"
+        self._attr_name = f"{name} Presence Hints"
+        self._attr_icon = "mdi:account-question"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
+
+    def _watched_entities(self) -> list[str]:
+        cfg = PERSONS[self._person_id]
+        return [cfg["person"], cfg["phone"]]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                self._watched_entities(),
+                self._async_recompute,
+            )
+        )
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_recompute, timedelta(minutes=5)
+            )
+        )
+        self._recompute()
+
+    @callback
+    def _async_recompute(self, *args) -> None:
+        self._recompute()
+
+    def _recompute(self) -> None:
+        probability, audit = compute_person_hint(self.hass, self._person_id)
+        self._attr_native_value = int(probability * 100)
+        self._attr_extra_state_attributes = audit
+        self.async_write_ha_state()
+
+
+class DriversHomeSensor(SensorEntity):
+    """Count of drivers currently likely home (person-hint >= 50%).
+
+    Integer count with home/away name lists in attributes. Intended as the
+    data source for a family dashboard card, replacing raw phone-presence.
+    Recomputes on any driver person-entity change plus a 5-minute backstop.
+    """
+
+    _attr_should_poll = False
+
+    def __init__(self) -> None:
+        self._attr_unique_id = "camera_intelligence_drivers_home"
+        self._attr_name = "Drivers Home"
+        self._attr_icon = "mdi:account-group"
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
+
+    def _watched_entities(self) -> list[str]:
+        return [PERSONS[pid]["person"] for pid in DRIVER_IDS]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                self._watched_entities(),
+                self._async_recompute,
+            )
+        )
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_recompute, timedelta(minutes=5)
+            )
+        )
+        self._recompute()
+
+    @callback
+    def _async_recompute(self, *args) -> None:
+        self._recompute()
+
+    def _recompute(self) -> None:
+        home_ids, away_ids, probs = drivers_home(self.hass)
+        self._attr_native_value = len(home_ids)
+        self._attr_extra_state_attributes = {
+            "home": [PERSONS[pid]["name"] for pid in home_ids],
+            "away": [PERSONS[pid]["name"] for pid in away_ids],
+            "probabilities": {PERSONS[pid]["name"]: p for pid, p in probs.items()},
+            "total_drivers": len(DRIVER_IDS),
+            "advisory": True,
+        }
+        self.async_write_ha_state()
 
 
 class AllVehiclesSensor(CameraIntelligenceSensor):

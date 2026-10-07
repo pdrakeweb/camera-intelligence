@@ -110,9 +110,22 @@ GET /api/camera_intelligence/state
 - `sensor.camera_intelligence_guest` — "Guest", `present` / `none` (attributes: first_seen, camera, streak)
 - `sensor.camera_intelligence_visitors` — "Visitors", single combined count: known visitors on the property + unknown guests (attributes: visitors, details — named visitors plus an "Unknown guest" entry when one is present, breakdown)
 - `sensor.camera_intelligence_package` — "Package", `delivered` / `none` (attributes: package_count, zones, location, truck_service, last_delivery)
+- `sensor.camera_intelligence_<vehicle>_presence_hints` — "Sorento Presence Hints", advisory 0–100% likelihood the vehicle is home (attributes: prior, time bucket, per-evidence contributions, audit). Fuses **non-camera evidence only** via Bayesian log-odds: time of day, key trackers, and driver-aware evidence (each mapped driver's person-hint probability, weighted primary 1.5 / secondary 0.6, plus a weak generic drivers-home-count lean). Camera classifications never feed it, so the vision agent can safely consume it as a prior without double-counting. The camera-based presence sensors above remain the primary UI source of truth.
+- `sensor.peter_presence_hints` (likewise kelly/abby/julia/sarah) — "Peter Presence Hints", advisory 0–100% likelihood the driver is home. Fuses **person entity + phone tracker + time of day only** (night 23:00–05:00 prior 0.95, else 0.75). person.<id> is the primary observation; the phone is secondary because cell presence alone is not 100% accurate. Away readings weigh more than home readings (a phone on a charger falsely reads "home"). peter_jr is excluded (non-driver).
+- `sensor.drivers_home` — "Drivers Home", integer count of drivers whose person-hint ≥ 50% (attributes: home/away name lists, per-driver probabilities, total). Intended data source for the family dashboard card, replacing raw phone presence.
 
 All entities use stable unique IDs and restore their last state across
 Home Assistant restarts.
+
+## Circularity rule
+
+- Person hints ← person entity / phone tracker / time of day ONLY.
+- Vehicle hints ← key trackers / person hints / drivers-home count / time of day ONLY.
+- Camera classifications feed NEITHER. The vision agent may consume vehicle
+  hints as priors; visual evidence enters exactly once, in the classifier.
+- Driver→vehicle mapping (Pete, Oct 6 2026): sky←peter; sportage←peter+abby;
+  entourage←abby; qx80←sarah; sorento←kelly+sarah; commander←julia
+  (primary listed first).
 
 ## Notes
 
